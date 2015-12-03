@@ -6,24 +6,24 @@ nonmetals-own [ valence charge ] ;; valence should be the number of valence elec
 
 to setup
   clear-all
-  crt 1 [
+  crt 10 [
     set breed metals
     set valence ( random 3 ) + 1  ;; creates a valence between 1 and 3
     setxy max-pxcor - random ( 2 * max-pxcor )  max-pycor - random ( 2 * max-pycor ) ;; randomly distribute in the world
-    set label valence ;;show the number of valence electrons on the atom... may also want to show charge?
+    set label charge ;;show the number of valence electrons on the atom... may also want to show charge?
     set shape "circle"
-    set charge 1
+    set size 2
     set color grey
   ]
   
-  crt 1 [
+  crt 10 [
     set breed nonmetals
     set valence ( random 3 ) + 5 ;; creates a valence between 5 and 7  ;; later could implement noble gases?
     setxy max-pxcor - random ( 2 * max-pxcor )  max-pycor - random ( 2 * max-pycor )
-    set label valence
-    set charge -1
+    set label charge
+    set size 2
     set shape "circle"
-    set color yellow
+    set color orange
   ]
    
   
@@ -32,6 +32,7 @@ end
 to go
   ask turtles [ 
     move
+    set label charge
    ]
   ask metals [
     bond
@@ -49,7 +50,19 @@ end
 
 
 to bond
-  if any? nonmetals-here [ ]
+  if any? nonmetals-here [
+    let x nonmetals-here with [ valence != 8 ]
+    while [ valence > 0 AND x != nobody ] [ 
+        set valence valence - 1
+        set charge charge + 1
+        ask one-of x [ 
+          set valence valence + 1
+          set charge charge - 1 
+        ]
+        set x nonmetals-here with [ valence != 8 ]
+      
+    ]
+  ]
   ;;
   
   ;; how do you transfer electrons?  
@@ -160,7 +173,7 @@ temperature
 temperature
 0
 2
-0.5
+0.2
 0.1
 1
 NIL
