@@ -1,80 +1,149 @@
 breed [ metals metal ]
 breed [ nonmetals nonmetal ]
-metals-own [ valence charge ]  ;; valence should be the number of valence electrons they have.  charge is initially zero, but will become nonzero when electrons are transferred
-nonmetals-own [ valence charge ] ;; valence should be the number of valence electrons they have.  charge is initially zero, but will become nonzero when electrons are transferred
+metals-own [ valence charge fx fy vx vy xc yc]  ;; valence should be the number of valence electrons they have.  charge is initially zero, but will become nonzero when electrons are transferred
+nonmetals-own [ valence charge fx fy vx vy xc yc ] ;; valence should be the number of valence electrons they have.  charge is initially zero, but will become nonzero when electrons are transferred
 
 
 to setup
   clear-all
-  crt #OfMetals [
+  reset-ticks
+  crt 40 [
     set breed metals
     set valence ( random 3 ) + 1  ;; creates a valence between 1 and 3
-    setxy max-pxcor - random ( 2 * max-pxcor )  max-pycor - random ( 2 * max-pycor ) ;; randomly distribute in the world
-    set label charge ;;show the charge on the atom... may also want to show valence electrons?
-    set shape "circle"
-    set size 2
     set color grey
+    set charge 0
   ]
-  
-  crt #OfNonMetals [
+
+  crt 40 [
     set breed nonmetals
     set valence ( random 3 ) + 5 ;; creates a valence between 5 and 7  ;; later could implement noble gases?
-    setxy max-pxcor - random ( 2 * max-pxcor )  max-pycor - random ( 2 * max-pycor )
-    set label charge  ;;show the charge on the atom... may also want to show valence electrons?
-    set size 2
-    set shape "circle"
     set color orange
+    set charge 0
   ]
-   
-  
+
+  ask turtles [
+    set shape "circle"
+    set size 2
+    displayAsGroup
+    setxy max-pxcor - random ( 2 * max-pxcor )  max-pycor - random ( 2 * max-pycor )  ;; randomly distribute around world
+    set xc xcor
+    set yc ycor
+    set vx 0
+    set vy 0
+  ]
+
 end
 
 to go
-  ask turtles [ 
-    move
-    set label charge
+  ask turtles [
+    set fx 0
+    set fy 0
+    displayAsGroup
    ]
-  ask metals [
-    if bond? [ bond ]
+  ask turtles [move-random]
+  ;;ask metals [bond]
+  ask turtles [update-force]
+  ask turtles [update-velocity]
+  ask turtles [update-position]
+  ask turtles [adjust-position]
+  ask metals [ bond ]
+
+  tick
+
+end
+
+
+
+to move-random
+ rt random-float 360  ;; face in a random direction
+ fd temperature ;; temperature is setup as a slider on the interface
+end
+
+to update-force ;; Turtle Procedure
+  ;; This is recursive over all the turtles, each turtle asks this of all other turtles
+  ask other turtles [ sum-its-force-on-me myself ]
+end
+
+to sum-its-force-on-me [it] ;; Turtle Procedure
+  let xd xc - [xc] of it
+  let yd yc - [yc] of it
+  let d sqrt ((xd * xd) + (yd * yd))
+
+  if d > 2 [
+    set fx fx - (cos (atan (- yd) (- xd))) * ([charge] of it * charge * k) / (d * d) ;; using equation F = - k q1 q2 / d^2, split into components, since
+    set fy fy - (sin (atan (- yd) (- xd))) * ([charge] of it * charge * k) / (d * d) ;; atan returns angle theta of the vector joining the two particles
+  ]
+  if d < 3 AND ([charge] of it * charge) < 0 [  ;;simulating a collision that stops the particle, only happens for particles of opposite charges
+    set vx 0
+    set vy 0
+    set fx 0
+    set fy 0
   ]
 end
 
-
-
-to move
- rt random-float 360  ;; face in a random direction
- fd temperature ;; temperature is setup as a slider on the interface
- first_law
+to update-velocity ;; Turtle Procedure
+  ;; Now we update each particle's velocity, by taking last time-step's velocity
+  ;; and adding the effect of the force to it. Technically v = vo + at -> v = vo + F/m t,
+  ;; for this similation we've just normalized mass
+  set vx (vx + fx)
+  set vy (vy + fy)
 end
 
+to update-position ;; Turtle Procedure
+  ;; Assuming a tick is a single second, then x = xo + vt -> x = xo + v(1)
+  set xc (xc + vx)
+  set yc (yc + vy)
+end
 
+to adjust-position
+  ;; If the turtles is inside the world, it is shown, otherwise hidden.  Can't use
+  ;; setxy for a point outside the world.
+  ifelse patch-at (xc - xcor) (yc - ycor) != nobody
+  [ setxy xc yc
+    show-turtle
+   ]
+  [ hide-turtle ]
+end
 
 to bond
   if any? nonmetals-here [
     let x nonmetals-here with [ valence != 8 ]
-    while [ valence > 0 AND x != nobody ] [ 
+    while [ valence > 0 AND x != nobody ] [
         set valence valence - 1
         set charge charge + 1
-        ask one-of x [ 
+        if one-of x != nobody [ask one-of x[ ;; assuming that it asks the same turtle stored in x that it does in the if-statement before it...
           set valence valence + 1
-          set charge charge - 1 
+          set charge charge - 1
         ]
         set x nonmetals-here with [ valence != 8 ]
-      
-    ]
+
+    ]]
+
   ]
   ;;
-  
-  ;; how do you transfer electrons?  
+
+  ;; how do you transfer electrons?
   ;; how do you change the charges and valence following transfer?
   ;; how do you account for the fact that once they transfer, they won't do so anymore??
-  
+
   ;;
+  let currentcharge charge
+
+
+  if any? nonmetals-here with [charge = currentcharge * -1][ ;; opposite charged ions change color, as if bonded
+
+    ask nonmetals-here [set color blue]
+    ask metals-here [set color red]
+
+    ]
+
+
 end
 
 
-;; Following function implements a very simple version of Coulomb's law.  
-;; Essentially, it identifies the turtle nearest to it, calculates the "force" caused by that turtle F = k q1 q2 / d^2, 
+
+;; Following function implements a very simple version of Coulomb's law.
+;; Essentially, it identifies the turtle nearest to it, calculates the "force" caused by that turtle F = k q1 q2 / d^2,
 ;; where k is a constant, q1 and q1 are charges of the two particles, and d is the distance between them.
 ;; Then it faces the turtle away from the other turtle, and moves the amount of the force
 ;; k is setup as a slider on the interface.
@@ -82,11 +151,37 @@ to first_law
   let nearestTurtle min-one-of other turtles [distance myself]
   let dist distance nearestTurtle
   let force k * charge * [ charge] of nearestTurtle / ( dist * dist )
-  
+
   face nearestTurtle
   rt 180
-  if abs force < 2 [ fd force   ]
-end 
+  if abs force < 2 [ fd force  show force ]
+
+
+end
+
+
+
+to displayAsGroup
+
+   if valence = 1 [set color red  set label "Alkali"]
+
+   if valence = 2 [set color orange]
+   if valence = 2 [set label "Alkaline"]
+   if valence = 3 [set color yellow]
+   if valence = 3 [set label "3A"]
+   if valence = 4 [set color green]
+   if valence = 4 [set label "4A"]
+   if valence = 5 [set color turquoise]
+   if valence = 5 [set label "5A"]
+   if valence = 6 [set color blue]
+   if valence = 6 [set label "6A"]
+   if valence = 7 [set color magenta]
+   if valence = 7 [set label "Halogen"]
+   if valence = 8 [set color grey]
+   if valence = 8 [set label "Noble"]
+   if valence = 0 [set color grey]
+   if valence = 0 [set label "Full"]
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
 210
@@ -102,8 +197,8 @@ GRAPHICS-WINDOW
 1
 1
 0
-1
-1
+0
+0
 1
 -16
 16
@@ -157,9 +252,9 @@ SLIDER
 k
 k
 0
-100
-8
 1
+0.2
+.1
 1
 NIL
 HORIZONTAL
@@ -173,49 +268,8 @@ temperature
 temperature
 0
 2
-0.5
+1
 0.1
-1
-NIL
-HORIZONTAL
-
-SWITCH
-74
-213
-177
-246
-bond?
-bond?
-0
-1
--1000
-
-SLIDER
-704
-38
-876
-71
-#OfMetals
-#OfMetals
-0
-100
-5
-1
-1
-NIL
-HORIZONTAL
-
-SLIDER
-702
-99
-874
-132
-#OfNonmetals
-#OfNonmetals
-0
-100
-5
-1
 1
 NIL
 HORIZONTAL
@@ -563,7 +617,7 @@ Polygon -7500403 true true 270 75 225 30 30 225 75 270
 Polygon -7500403 true true 30 75 75 30 270 225 225 270
 
 @#$#@#$#@
-NetLogo 5.1.0
+NetLogo 5.3
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
